@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SVG Icon Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      #iconGrid img {
+        max-width: 100px;
+        max-height: 100px;
+      }
+      #previewIcon {
+        max-width: 200px;
+        max-height: 200px;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 p-8">
+    <div class="container mx-auto max-w-4xl bg-white p-6 rounded-lg shadow-md">
+      <h1 class="text-2xl font-bold mb-4">SVG Icon Manager</h1>
+
+      <div class="mb-4">
+        <input
+          type="file"
+          id="fileUpload"
+          multiple
+          accept=".svg"
+          class="hidden"
+        />
+
+        <button
+          id="uploadButton"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+        >
+          Upload SVG Icons
+        </button>
+      </div>
+
+      <div id="iconGrid" class="grid grid-cols-5 gap-4 mb-6"></div>
+
+      <div id="customizationPanel" class="hidden bg-gray-50 p-4 rounded">
+        <h2 class="text-xl mb-4">Customize Icon</h2>
+
+        <div class="mb-4">
+          <label class="block mb-2">Color</label>
+          <input type="color" id="colorPicker" class="w-full h-10" />
+        </div>
+
+        <div class="mb-4">
+          <label class="block mb-2">Stroke Width</label>
+          <input
+            type="range"
+            id="strokeWidthSlider"
+            min="0.5"
+            max="10"
+            step="0.5"
+            value="1"
+            class="w-full"
+          />
+          <span id="strokeWidthValue">1</span>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <div class="w-40 h-40 flex items-center justify-center border">
+            <img
+              id="previewIcon"
+              alt="Modified Icon"
+              class="max-w-full max-h-full"
+            />
+          </div>
+
+          <button
+            id="downloadButton"
+            class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          >
+            Download Modified Icon
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      class SVGIconManager {
+        constructor() {
+          this.icons = [];
+          this.selectedIcon = null;
+
+          // DOM Elements
+          this.fileUpload = document.getElementById("fileUpload");
+          this.uploadButton = document.getElementById("uploadButton");
+          this.iconGrid = document.getElementById("iconGrid");
+          this.customizationPanel =
+            document.getElementById("customizationPanel");
+          this.colorPicker = document.getElementById("colorPicker");
+          this.strokeWidthSlider = document.getElementById("strokeWidthSlider");
+          this.strokeWidthValue = document.getElementById("strokeWidthValue");
+          this.previewIcon = document.getElementById("previewIcon");
+          this.downloadButton = document.getElementById("downloadButton");
+
+          this.bindEvents();
+        }
+
+        bindEvents() {
+          this.uploadButton.addEventListener("click", () =>
+            this.fileUpload.click()
+          );
+          this.fileUpload.addEventListener("change", (e) =>
+            this.handleFileUpload(e)
+          );
+          this.colorPicker.addEventListener("input", () =>
+            this.updateIconPreview()
+          );
+          this.strokeWidthSlider.addEventListener("input", (e) => {
+            this.strokeWidthValue.textContent = e.target.value;
+            this.updateIconPreview();
+          });
+          this.downloadButton.addEventListener("click", () =>
+            this.downloadIcon()
+          );
+        }
+
+        handleFileUpload(event) {
+          const files = Array.from(event.target.files).filter(
+            (file) => file.type === "image/svg+xml"
+          );
+
+          const fileReaders = files.map((file) => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) =>
+                resolve({
+                  name: file.name,
+                  content: e.target.result,
+                });
+              reader.onerror = reject;
+              reader.readAsText(file);
+            });
+          });
+
+          Promise.all(fileReaders).then((processedIcons) => {
+            this.icons = processedIcons;
+            this.renderIconGrid();
+          });
+        }
+
+        renderIconGrid() {
+          this.iconGrid.innerHTML = "";
+          this.icons.forEach((icon, index) => {
+            const iconElement = document.createElement("div");
+            iconElement.className =
+              "cursor-pointer p-2 border border-gray-300 hover:border-blue-500";
+
+            const img = document.createElement("img");
+            img.src = `data:image/svg+xml;utf8,${encodeURIComponent(
+              icon.content
+            )}`;
+            img.alt = icon.name;
+
+            iconElement.appendChild(img);
+            iconElement.addEventListener("click", () => this.selectIcon(icon));
+            this.iconGrid.appendChild(iconElement);
+          });
+
+          // Select first icon by default
+          if (this.icons.length > 0) {
+            this.selectIcon(this.icons[0]);
+          }
+        }
+
+        selectIcon(icon) {
+          this.selectedIcon = icon;
+          this.customizationPanel.classList.remove("hidden");
+          this.updateIconPreview();
+        }
+
+        modifySVG(svgContent, color, strokeWidth) {
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = svgContent;
+          const svgElement = tempDiv.querySelector("svg");
+
+          if (svgElement) {
+            svgElement
+              .querySelectorAll(
+                "path, rect, circle, ellipse, polygon, polyline, line"
+              )
+              .forEach((element) => {
+                element.removeAttribute("fill");
+                element.setAttribute("stroke", color);
+                element.setAttribute("stroke-width", strokeWidth);
+                element.setAttribute("stroke-linecap", "round");
+                element.setAttribute("stroke-linejoin", "round");
+              });
+
+            return new XMLSerializer().serializeToString(svgElement);
+          }
+          return svgContent;
+        }
+
+        updateIconPreview() {
+          if (!this.selectedIcon) return;
+
+          const color = this.colorPicker.value;
+          const strokeWidth = this.strokeWidthSlider.value;
+
+          const modifiedSVG = this.modifySVG(
+            this.selectedIcon.content,
+            color,
+            strokeWidth
+          );
+
+          this.previewIcon.src = `data:image/svg+xml;utf8,${encodeURIComponent(
+            modifiedSVG
+          )}`;
+        }
+
+        downloadIcon() {
+          if (!this.selectedIcon) return;
+
+          const color = this.colorPicker.value;
+          const strokeWidth = this.strokeWidthSlider.value;
+
+          const modifiedSVG = this.modifySVG(
+            this.selectedIcon.content,
+            color,
+            strokeWidth
+          );
+
+          const blob = new Blob([modifiedSVG], { type: "image/svg+xml" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = `modified_${this.selectedIcon.name}`;
+          link.click();
+        }
+      }
+
+      // Initialize the application
+      new SVGIconManager();
+    </script>
+  </body>
+</html>
